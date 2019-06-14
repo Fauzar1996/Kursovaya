@@ -1,0 +1,240 @@
+#include <winsock2.h>
+#include <Windows.h>
+#include <stdio.h>                    // ввод-вывод
+#include <locale.h>                   // русский шрифт 
+
+#pragma comment(lib, "ws2_32.lib")    // библиотека winsock 
+
+#define   BUFFER_LENGTH   2048        // буфер  приёма в 2-KB 
+
+int  read_msg_pop3(const char* msg, int  size);      // объявление функции чтения 
+class   xPop3 {        // описание класса POP3
+private:        SOCKET      client;   // свойство - сокет     
+				HANDLE      run;      // свойство - поток       
+typedef   int  (read_message)(const char*  msg, int  size); public:  
+	xPop3(void) : client(NULL), run(NULL), message(NULL)  {} // список инициализации свойств  
+public:       read_message*   message;  // свойство - указатель на функцию чтения сообщений 
+
+int  create(const char* address, unsigned short port = 110) { // метод - создание сокета  
+	hostent*    host  = NULL;       // структура данных Хоста   
+	sockaddr_in  addr;              // структура с описанием IP сокета   
+	ZeroMemory(&addr, sizeof(sockaddr_in)); // обнуление    
+	addr.sin_family    = AF_INET;          // неизменяемое значение     
+	addr.sin_port      = htons( port );    // номер занимиемого порта     
+	host = gethostbyname( address );       // чтение информации о Хосте   
+	if(host == NULL) return  WSAGetLastError();  // проверка и обработка ошибок    
+	memcpy(&addr.sin_addr, host->h_addr_list[0], host->h_length);  // получение IP адреса,                    
+																   //привязанного к сокету   
+	client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);     // создание сокета  
+	if(client == INVALID_SOCKET) return  WSAGetLastError();  // проверка и обработка ошибок      
+	int   result = connect(client, (sockaddr*)&addr, sizeof(sockaddr_in)); //подключение к Хосту
+	if(result == SOCKET_ERROR ) 
+	return  WSAGetLastError(); // проверка и обработка ошибок  
+	DWORD  id = 0U;    
+	run  = CreateThread(NULL, 0U, xPop3::thread, //запуск потока для чтения сообщений     
+		(LPVOID)this, THREAD_PRIORITY_NORMAL, &id);   
+	return  0;  
+}        int   write_command(const char*  cmd) {                 // метод - запись команды  
+	int res = send(client, cmd, strlen(cmd), NULL);   // отправить команду
+	if(res  == SOCKET_ERROR)
+		return  WSAGetLastError();  // проверка и обработка ошибок  
+	return 0;   
+}  
+void    closed(void)
+{                       // метод - закрытие сокета 
+	
+
+		message = NULL;  
+	    TerminateThread(run, STILL_ACTIVE);  // уничтожить поток  
+		CloseHandle(run);                    // аннулировать дескриптор потока      
+		closesocket(client);                   // закрыть сокет 
+		client = NULL;                       // обнуление свойства client 
+		WSACleanup();                        // освободить ресурсы   
+}        static  bool  startup(void) 
+{                // метод - инициализация сокета 
+WSADATA  data; 
+if(WSAStartup(MAKEWORD(2, 0), &data) != 0) 
+return  false; 
+return  true;   
+} 
+private:                      // создание потока для чтения сообщений   
+	static DWORD  __stdcall thread(void*  param) {  // создание потока 
+		xPop3* pop = reinterpret_cast<xPop3*>(param); 
+		char       buffer[BUFFER_LENGTH];             // буфер для чтения 
+
+	while (1) {
+		memset(buffer, '\0', BUFFER_LENGTH);      // разделитель - ноль 
+		int  result  = recv(pop->client,          // чтение данных   
+			buffer, BUFFER_LENGTH,  NULL);  
+		if(result > 0)    
+			(*pop->message)(buffer, result);  
+		else   
+			if(result == SOCKET_ERROR)
+			{ 
+				puts("\nПроизошёл сброс при чтение данных сервером !!!");       
+				break;   
+			}  
+	} 
+	return 0U;
+	}
+}; 
+
+		xPop3  pop;
+
+		class   Connection
+		{        // описание класса Connection 
+		private:   
+			HANDLE      TCon;     // свойство - поток
+		public:   
+			int start(void)
+			{  
+				DWORD  id = 0U;  
+				TCon  = CreateThread(NULL, 0U, Connection::thread, // запуск потока контроля подключения 
+					(LPVOID)this, THREAD_PRIORITY_NORMAL, &id);   
+		return  0; 
+			}
+		private:       
+			static DWORD  __stdcall  thread(void*  param)  // создание потока 
+			{
+
+			while (1)
+			{
+				if (pop.write_command("noop\r\n") == 0)    
+					Sleep(3000);  
+				else
+				{
+					puts("Разрыв соединения с сервером");   
+				break;
+				}
+			}
+
+			
+				
+
+				return 0U;
+		}
+	};
+
+
+
+	//   главный модуль программы 
+		int   main(int argc, char* argv[])
+		{    
+			
+			system("color 17");                // синий фон 
+			setlocale(LC_ALL, "Russian");   // русский язык 
+
+	char  saddr[32];
+	static char  str[256];
+
+	static unsigned short Nport = 110;       // номер порта 
+
+	Connection Con;    
+	bool unconnect = 1;  
+	while (unconnect)
+	{
+
+		if (!xPop3::startup())
+		{
+			puts("Не удалось загрузить библиотеку WSA !!!");      
+			exit(1);
+		}
+
+		pop.message = read_msg_pop3;     // передача функции чтения по указателю 
+
+		memset(saddr, '\0', sizeof(saddr));
+
+		printf("PORT- "); 
+		_itoa(Nport, str, 10); 
+		printf(str); 
+		printf(":");
+
+		gets_s (saddr);
+
+		while (saddr[0] < 65)     // пока первый символ не буква 
+		{      if ((saddr[0]<58) && (saddr[0]>47) &&     // первый символ цифра 
+			(saddr[1]<58) && (saddr[1]>47) &&     // второй символ цифра   
+			(saddr[2]<58) && (saddr[2]>47) &&     // третий символ цифра  
+			(saddr[3]==0))                        // четвёртый символ - конец строки 
+		{   
+			Nport=*saddr*100+*(saddr+1)*10+*(saddr+2);         // смена номера порта  
+		printf("PORT- ");
+		printf(saddr);
+		printf(":"); 
+		}  
+		else 
+		{  
+			printf("неправильный ввод \n");
+			printf("PORT- "); 
+			
+			
+
+			_itoa(Nport, str, 10); 
+			printf(str); 
+			printf(":");
+	}  
+		gets_s (saddr);
+}
+
+if (pop.create(saddr, Nport) != 0)
+{
+	printf("не удалось установить соединение с сервером \n");  
+	pop.closed();
+}
+else 
+unconnect = 0;  
+	}
+
+Sleep(500);  // пауза 0,5 сек. для получения ответа сервера 
+
+printf("\nсоединение установлено \n");
+
+for (int ii = 0; ii < 7; ii++) 
+	str[ii + 7] = str[ii];
+strcpy(str, "\nPORT- "); 
+strcat(str, saddr);
+strcat(str, ": ");   
+printf(str);
+
+Con.start();        // запуск контроля подкдючения    
+char  cmd[128];            while(1)   // exit -  завершение программы
+{
+	memset(cmd, '\0', sizeof(cmd));         
+	gets_s (cmd);      // ввод комманд-POP3:  user, pass, list, retr, top    
+	strcat(cmd, "\r\n");   // добавляем   
+	if(strlen(cmd) < 2) 
+	{     
+		memset(cmd, '\0', sizeof(cmd));
+		printf("неверная команда \n"); 
+		printf(str);
+		continue;
+	}   
+	if(! _stricmp(cmd, "exit\r\n"))  // завершение    
+		break;  
+	else
+	{       
+		if(pop.write_command(cmd) != 0)   
+			puts("Ошибка сокета при посылке комманды POP !"); 
+		else       { 
+			Sleep(1000);  // пауза 1 сек. для получения ответа сервера   
+	printf(str);     
+		}     
+	}  
+}    
+pop.closed(); 
+return  0;
+		}     
+
+
+
+// функция обратного вызова выводит принявшие сообщения
+		int  read_msg_pop3(const char*  msg, int  size)
+		{ 
+			if (strcat((char*)msg,"+OK")==0)  
+		{
+				printf(msg);
+		return 1;
+		}
+		else
+			return 0;
+		}
